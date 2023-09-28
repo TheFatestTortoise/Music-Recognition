@@ -1,0 +1,5 @@
+train: /LAM/data/full_page_letters/images/train
+val: /LAM/data/full_page_letters/images/val
+
+nc: 1
+names: ["Itallian"]
