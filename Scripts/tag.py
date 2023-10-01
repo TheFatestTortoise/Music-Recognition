@@ -9,7 +9,6 @@ import cv2
 import os
 import copy
 global stored_img
-global prev_size
 global img
 global change
 global OFFSET_CLICK
@@ -54,11 +53,10 @@ root = os.path.dirname(os.getcwd())
 dataset = os.path.join(root, "Notes_Dataset")
 filedir = os.path.join(dataset, r'labels\train')
 imagedir = os.path.join(dataset, r'images\train')
-savedir = ''
+savedir = os.path.join(dataset, r'labels\un_split')
 
 #Cached Values for handling rect deletion
 rects = []
-prev_size = (100, 100)
 
 change = 'None'
 
@@ -80,8 +78,8 @@ class ROI:
     def calculate_properties(self):
         self.w = abs(self.x2 - self.x1)
         self.h = abs(self.y2 - self.y1)
-        self.x_center = int(max(self.x2, self.x1) - (self.w)//2)
-        self.y_center = int(max(self.y2, self.y1) - (self.h)//2)
+        self.x_center = int((self.x2 + self.x1)//2)
+        self.y_center = int((self.y2 + self.y1)//2)
         
     @property
     def x1(self):
@@ -129,7 +127,6 @@ def mouse_clicks(event, x, y, flags, param):
     global img
     global stored_img
     global rects
-    global prev_size
     global OFFSET_CLICK
     global change
     global more_info
@@ -212,7 +209,7 @@ def mouse_clicks(event, x, y, flags, param):
 
 for image in os.listdir(imagedir):
     cor_txt = image.replace('png', 'txt')
-    filename = os.path.join(filedir, cor_txt)
+    filename = os.path.join(savedir, cor_txt)
     if not os.path.isfile(filename):
 
         imagename = os.path.join(imagedir, image)
@@ -222,14 +219,22 @@ for image in os.listdir(imagedir):
         print('\n| Image N |', image,
               '\n| Image W |', w,
               '\n| Image H |', h)
+        
+        if w > 1300 or h > 800:
+            img = cv2.resize(img, (0, 0), fx = 0.5, fy = 0.5)
+            h, w, l = img.shape
+            print('\nAdjusted Image Size')
+            print('\n| Image N |', image,
+                  '\n| Image W |', w,
+                  '\n| Image H |', h)
+        
         stored_img = img
-        prev_size = (w/10, h/10)
         
         cv2.imshow('img', img)
         cv2.setMouseCallback('img', mouse_clicks)
         k = cv2.waitKey(0)
 
-        #Q/ESC
+        #q/ESC
         while k != 113 and k != 27:
             k = cv2.waitKey(0)
             #i
@@ -258,22 +263,28 @@ for image in os.listdir(imagedir):
             elif k <= 55 and k >= 48:
                 c_select = k - 48
                 more_info = False
-        
-        count = 0
-        print('\n BOX INFO FOR', image)
-        for box in rects:
-            print('      BOX', count)
-            box.print_info()
-            count += 1
-            
-        cv2.destroyAllWindows()
-        rects = []
-        more_info = False
+        #q
+        if k == 113:
+            count = 0
+            print('\n BOX INFO FOR', image)
+            if os.path.isdir(savedir):
+                print(filename)
+    
+                with open(filename, 'w') as w:
+                    for box in rects:
+                        print('      BOX', count)
+                        box.print_info()
+                        count += 1
+                        cor_txt = image.replace('png', 'txt')
+                        if count < len(rects):
+                            w.write("{} {:.3f} {:.3f} {:.3f} {:.3f}".format(box.classID, box.x_center, box.y_center, box.w, box.h) + "\n")    
+                        else:
+                            w.write("{} {:.3f} {:.3f} {:.3f} {:.3f}".format(box.classID, box.x_center, box.y_center, box.w, box.h))
+            cv2.destroyAllWindows()
+            rects = []
+            more_info = False
 
-        if savedir != '':
-            classID = (R_N + 1) * c_select
-            savename = os.path.join(savedir, image)
-            cv2.imwrite(savename, img)
+            
         #Esc
         if k == 27:
             break
