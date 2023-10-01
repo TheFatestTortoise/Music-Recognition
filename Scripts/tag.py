@@ -10,84 +10,205 @@ import os
 import copy
 global stored_img
 global prev_size
-global stored_rect
 global img
 global change
 global OFFSET_CLICK
+global DEFAULT_SHAPE
+global more_info
+global classID
+global R_N
+global c_select
 
+#Distance for clicks to render
 OFFSET_CLICK = 10
+DEFAULT_SHAPE = (20, 20)
+'''
+R_N:
+    0 Rests
+    1 Notes
+Classes:
+    0 Natural
+    1 Whole
+    2 Half
+    3 Quarter
+    4 Eigth
+    5 Sixteenth
+    6 Flat/Sharp
+    7 Trebble/Bass
+All 15 classIDs can easily be calculated
+(R_N + 1) * class_select = ClassIDs
+'''
+notes = ['Natural', 'Whole Rest', '1/2 Rest', '1/4 Rest', '1/8 Rest', '1/16 Rest', 'Flat', 'Bass Clef',
+         'Whole Note', '1/2 Note', '1/4 Note', '1/8 Note', '1/16 Note', 'Sharp', 'Treble Clef']
+#Rest = False, Notes = True
+R_N = False
+c_select = 0
+
+CLASS_ID = 0
+
+more_info = False
+
+
+#Dirs
 root = os.path.dirname(os.getcwd())
 dataset = os.path.join(root, "Notes_Dataset")
 filedir = os.path.join(dataset, r'labels\train')
 imagedir = os.path.join(dataset, r'images\train')
-stored_rect = (0, 0)
 savedir = ''
 
+#Cached Values for handling rect deletion
+rects = []
 prev_size = (100, 100)
 
 change = 'None'
+
+class ROI:
+    def __init__(self, pt1, pt2, classNUM):
+        self.classID = classNUM
+        self.pt1 = pt1
+        self.pt2 = pt2
+        self.calculate_properties()
+    def print_info(self):
+        self.calculate_properties()
+        print('|  Class |', self.classID,
+              '\n| Point1 |', self.pt1,
+              '\n| Point2 |', self.pt2,
+              '\n|   W    |', self.w,
+              '\n|   H    |', self.h,
+              '\n|  X_C   |', self.x_center,
+              '\n|  Y_C   |', self.y_center)
+    def calculate_properties(self):
+        self.w = abs(self.x2 - self.x1)
+        self.h = abs(self.y2 - self.y1)
+        self.x_center = int(max(self.x2, self.x1) - (self.w)//2)
+        self.y_center = int(max(self.y2, self.y1) - (self.h)//2)
+        
+    @property
+    def x1(self):
+        return(self._x1)
+    @x1.setter
+    def x1(self, x):
+        self._x1 = x
+    
+    @property
+    def x2(self):
+        return(self._x2)
+    @x2.setter
+    def x2(self, x):
+        self._x2 = x
+
+    @property
+    def y1(self):
+        return(self._y1)
+    @y1.setter
+    def y1(self, y):
+        self._y1 = y
+
+    @property
+    def y2(self):
+        return(self._y2)
+    @y2.setter
+    def y2(self, y):
+        self._y2 = y
+
+    @property
+    def pt1(self):
+        return(self._x1, self._y1)
+    @pt1.setter
+    def pt1(self, pt1):
+        self._x1, self._y1 = pt1
+    
+    @property
+    def pt2(self):
+        return(self._x2, self._y2)
+    @pt2.setter
+    def pt2(self, pt2):
+        self._x2, self._y2 = pt2
+    
 def mouse_clicks(event, x, y, flags, param):
     global img
     global stored_img
-    global stored_rect
+    global rects
     global prev_size
     global OFFSET_CLICK
     global change
+    global more_info
+    global c_select
+    global R_N    
     h, w, l = stored_img.shape
-    
-    prev_x, prev_y = prev_size
-    
-    
-    
+    prev_x, prev_y = DEFAULT_SHAPE if len(rects) < 1 else (abs(rects[-1].x1 - rects[-1].x2), abs(rects[-1].y1 - rects[-1].y2))
     if event == cv2.EVENT_LBUTTONDOWN:
+        more_info = False
+        if len(rects) > 0:
+            img = stored_img
+            cv2.rectangle(img, rects[-1].pt1, rects[-1].pt2, (0, 255, 0), 1)
         stored_img = copy.deepcopy(img)
+        
         pt1 = (int(x - (prev_x//2)), int(y - (prev_y//2)))
         pt2 = (int(x + (prev_x//2)), int(y + (prev_y//2)))
-        stored_rect = (pt1, pt2)
-        print(pt1, pt2)
-        if all(x > 0 for x in pt1) and pt2 < (w, h):
+        
+        n_b = ROI(pt1, pt2, c_select * (R_N + 1))
+        if n_b.x1 > 0 and n_b.x2 < w and n_b.y1 > 0 and n_b.y2 < h:
             cv2.rectangle(img, pt1, pt2, (0, 0, 255), 1)
             cv2.imshow('img', img)
-    elif event == cv2.EVENT_RBUTTONDOWN and stored_rect != (0, 0):
-        pt1, pt2 = stored_rect
 
-        #Means we are only looking at the T/B
-        if x > pt1[0] + OFFSET_CLICK and x < pt2[0] - OFFSET_CLICK:
-            if y > pt1[1] - OFFSET_CLICK and y < pt1[1] + OFFSET_CLICK:
-                change = 'TOP'
-            elif y > pt2[1] - OFFSET_CLICK and y < pt2[1] + OFFSET_CLICK:
-                change = 'BOT'
-        elif y > pt1[1] + OFFSET_CLICK and y < pt2[1] - OFFSET_CLICK:
-            if x > pt1[0] - OFFSET_CLICK and x < pt1[0] + OFFSET_CLICK:
-                change = 'LEF'
-            elif x > pt2[0] - OFFSET_CLICK and x < pt2[0] + OFFSET_CLICK:
-                change = 'RIG'
-                    
+            rects.append(n_b)
+            n_b.print_info()
+    elif event == cv2.EVENT_RBUTTONDOWN and len(rects) > 0:
+        more_info = False
+        x1 = rects[-1].x1
+        x2 = rects[-1].x2
+        y1 = rects[-1].y1
+        y2 = rects[-1].y2
+
+        #T/B
+        if x1 + OFFSET_CLICK < x < x2 - OFFSET_CLICK and y1 - OFFSET_CLICK < y < y1 + OFFSET_CLICK:
+            change = 'TOP'
+        elif x1 + OFFSET_CLICK < x < x2 - OFFSET_CLICK and y2 - OFFSET_CLICK < y < y2 + OFFSET_CLICK:
+            change = 'BOT'
+        #L/R
+        elif x1 - OFFSET_CLICK < x < x1 + OFFSET_CLICK and y1 + OFFSET_CLICK < y < y2 - OFFSET_CLICK:
+            change = 'LEF'
+        elif x2 - OFFSET_CLICK < x < x2 + OFFSET_CLICK and y1 + OFFSET_CLICK < y < y2 - OFFSET_CLICK:
+            change = 'RIG'
+        #Corners
+        elif x1 - OFFSET_CLICK <= x <= x1 + OFFSET_CLICK and y1 - OFFSET_CLICK <= y <= y1 + OFFSET_CLICK:
+            change = "TOP_LEF"
+        elif x2 - OFFSET_CLICK <= x <= x2 + OFFSET_CLICK and y1 - OFFSET_CLICK <= y <= y1 + OFFSET_CLICK:
+            change = "TOP_RIG"
+        elif x1 - OFFSET_CLICK <= x <= x1 + OFFSET_CLICK and y2 - OFFSET_CLICK <= y <= y2 + OFFSET_CLICK:
+            change = "BOT_LEF"  
+        elif x2 - OFFSET_CLICK <= x <= x2 + OFFSET_CLICK and y2 - OFFSET_CLICK <= y <= y2 + OFFSET_CLICK:
+            change = "BOT_RIG"  
     elif event == cv2.EVENT_RBUTTONUP:
+        more_info = False
         img = copy.deepcopy(stored_img)
-        pt1, pt2 = stored_rect
-        if change == 'TOP':
-            print(y)
-            x_pt = pt1[0]
-            stored_rect = ((x_pt, y), pt2)
-        elif change == 'BOT':
-            print(y)
-            x_pt = pt2[0]
-            stored_rect = (pt1, (x_pt, y))
-        elif change == 'LEF':
-            print(y)
-            y_pt = pt1[1]
-            stored_rect = ((x, y_pt), pt2)
-        elif change == 'RIG':
-            print(y)
-            y_pt = pt2[1]
-            stored_rect = (pt1, (x, y_pt))
+        pt1 = rects[-1].pt1
+        pt2 = rects[-1].pt2
+        x1, y1 = pt1
+        x2, y2 = pt2
+        if change == 'TOP' and y < y2:
+            rects[-1].y1 = max(0, y)
+        elif change == 'BOT' and y > y1:
+            rects[-1].y2 = min(y, h)
+        elif change == 'LEF' and x < x2:
+            rects[-1].x1 = max(0, x)
+        elif change == 'RIG' and x > x1:
+            rects[-1].x2 = min(x, w)
+        elif change == 'TOP_LEF' and all(i < j for i, j in zip((x, y), pt2)):
+            rects[-1].pt1 = (max(0, x), max(0, y))
+        elif change == 'TOP_RIG' and all(i < j for i, j in zip((x1, y), (x, y2))):
+            rects[-1].y1 = max(0, y)
+            rects[-1].x2 = min(x, w)
+        elif change == 'BOT_LEF' and all(i < j for i, j in zip((x, y1), (x2, y))):
+            rects[-1].y2 = min(y, h)
+            rects[-1].x1 = max(0, x)
+        elif change == 'BOT_RIG' and all(i < j for i, j in zip(pt1, (x, y))):
+            rects[-1].pt2 = (min(x, w), min(y, h))
         
-        cv2.rectangle(img, stored_rect[0], stored_rect[1], (0, 0, 255), 1)
-        prev_size = (stored_rect[1][0] - stored_rect[0][0], stored_rect[1][1] - stored_rect[0][1])
+        cv2.rectangle(img, rects[-1].pt1, rects[-1].pt2, (0, 0, 255), 1)
         cv2.imshow('img', img)
         change = 'None'
-
 
 for image in os.listdir(imagedir):
     cor_txt = image.replace('png', 'txt')
@@ -98,20 +219,63 @@ for image in os.listdir(imagedir):
         img = cv2.imread(imagename)
         
         h, w, l = img.shape
-        print(w, h)
+        print('\n| Image N |', image,
+              '\n| Image W |', w,
+              '\n| Image H |', h)
         stored_img = img
         prev_size = (w/10, h/10)
         
+        cv2.imshow('img', img)
+        cv2.setMouseCallback('img', mouse_clicks)
+        k = cv2.waitKey(0)
+
+        #Q/ESC
+        while k != 113 and k != 27:
+            k = cv2.waitKey(0)
+            #i
+            if k == 105 and len(rects) > 0:
+                if not more_info:
+                    print('\n|Current R|', (R_N + 1),
+                          '\n|Current S|', c_select,
+                          '\n|Current N|', notes[c_select * (R_N + 1)])
+                    rects[-1].print_info()
+                    more_info = True
+                else:
+                    more_info = False
+                    os.system('cls')
+                    count = 0
+                    print(' BOX INFO FOR', image)
+                    for box in rects:
+                        print('      BOX', count)
+                        box.print_info()
+                        count += 1
+            #r
+            elif k == 114:
+                print(R_N, not R_N)
+                R_N = not R_N
+                more_info = False
+            #number change class
+            elif k <= 55 and k >= 48:
+                c_select = k - 48
+                more_info = False
+        
+        count = 0
+        print('\n BOX INFO FOR', image)
+        for box in rects:
+            print('      BOX', count)
+            box.print_info()
+            count += 1
+            
+        cv2.destroyAllWindows()
+        rects = []
+        more_info = False
+
         if savedir != '':
+            classID = (R_N + 1) * c_select
             savename = os.path.join(savedir, image)
             cv2.imwrite(savename, img)
-        else:
-            cv2.imshow('img', img)
-            cv2.setMouseCallback('img', mouse_clicks)
-            k = cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            if k == 27:
-                break
-                
+        #Esc
+        if k == 27:
+            break
     else:
         print('No corresponding txt')
