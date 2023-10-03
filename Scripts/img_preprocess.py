@@ -9,7 +9,9 @@ import cv2
 import numpy as np
 import os
 import imutils
-page_dir = r'F:\LAM\full_pages'
+import sys
+page_dir = r"C:\Users\Mason\Desktop\Music Recognition\Staff_Dataset\Raw"
+save_dir = r"C:\Users\Mason\Desktop\Music Recognition\Staff_Dataset\PreProcess"
 
 for page in os.listdir(page_dir):
     page_path = os.path.join(page_dir, page)
@@ -23,19 +25,24 @@ for page in os.listdir(page_dir):
         
         #Shrinks image to a viewable size and displays for verification
         
-        resized_img = imutils.resize(img, height = 980)
+        resized_img = imutils.resize(img, width = 980)
         
-        binarized_img = cv2.adaptiveThreshold(resized_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 3, 9)
+        blur = np.array([[1, 1, 1],
+                [1, 1, 1],
+                [1, 1, 1]])                                                                                    
+        
+        smoothed_img = cv2.filter2D(resized_img, -1, blur)
+        binarized_img = cv2.adaptiveThreshold(resized_img, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 25, 30)
         
         cv2.imshow('image', binarized_img)
         h, w = binarized_img.shape
         print(w, h)
         x = cv2.waitKey(0)
         if x == 32:
-        
-            cv2.imwrite(r'F:\LAM\Screenshot 2023-09-05 215139.png', binarized_img)
+            savepath = os.path.join(save_dir, page)
+            cv2.imwrite(savepath, binarized_img)
         
         elif x == 27:
             cv2.destroyAllWindows()
-            quit()
+            sys.exit()
         cv2.destroyAllWindows()
